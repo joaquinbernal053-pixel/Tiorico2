@@ -22,10 +22,9 @@
     }(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
 
     fbq('init', '25971552335789567');
-    fbq('track', 'PageView'); // Evento 1
+    fbq('track', 'PageView');
   </script>
 
-  <!-- Pixel fallback -->
   <noscript>
     <img height="1" width="1" style="display:none"
       src="https://www.facebook.com/tr?id=25971552335789567&ev=PageView&noscript=1"/>
@@ -120,7 +119,6 @@
 <body>
   <div class="wrap">
     <div class="brand">TÍO RICO</div>
-
     <div class="vip"><span>ACCESO VIP</span></div>
 
     <div class="card">
@@ -148,53 +146,27 @@
   <script>
     (function(){
       const btn = document.getElementById('wppBtn');
-      let alreadyFired = false; // evita doble disparo touch+click
-
-      // Backup: dispara un beacon a Facebook si el navegador corta la navegación
-      function beacon(ev){
-        try{
-          const id = '25971552335789567';
-          const u = 'https://www.facebook.com/tr/?id=' + encodeURIComponent(id) +
-                    '&ev=' + encodeURIComponent(ev) +
-                    '&dl=' + encodeURIComponent(location.href) +
-                    '&rl=' + encodeURIComponent(document.referrer || '') +
-                    '&if=false&ts=' + Date.now();
-          if(navigator.sendBeacon) navigator.sendBeacon(u, '');
-          else (new Image()).src = u;
-        }catch(e){}
-      }
-
-      function fireEvents(){
-        // 1) Estándar "Suscribirte"
-        let okSub = false;
-
-        try { fbq('track','Subscribe'); okSub = true; } catch(e) {}
-        if(!okSub) beacon('Subscribe');
-
-        // 2) Custom
-        try { fbq('trackCustom','WhatsAppClick'); } catch(e) { beacon('WhatsAppClick'); }
-        try { fbq('trackCustom','SubscribedButton'); } catch(e) { beacon('SubscribedButton'); }
-      }
+      let fired = false; // lock anti-duplicado
 
       function handler(e){
-        e.preventDefault();
-        if(alreadyFired) return;
-        alreadyFired = true;
+        // si ya disparó, no vuelve a disparar
+        if(fired) return;
+        fired = true;
 
+        e.preventDefault();
         const url = btn.getAttribute('href');
 
-        fireEvents();
-        // reintento por si fbq terminó de cargar justo después
-        setTimeout(fireEvents, 200);
+        // Disparo ÚNICO (sin reintentos y sin touchstart)
+        try { fbq('track','Subscribe'); } catch(e) {}
+        try { fbq('trackCustom','WhatsAppClick'); } catch(e) {}
+        try { fbq('trackCustom','SubscribedButton'); } catch(e) {}
 
-        // abrir WhatsApp después de dar tiempo a que salgan requests
         setTimeout(function(){
           window.location.href = url;
-        }, 550);
+        }, 400);
       }
 
-      // en mobile suele entrar touchstart antes que click, evitamos doble
-      btn.addEventListener('touchstart', handler, {passive:false});
+      // Solo CLICK (evita touchstart + click)
       btn.addEventListener('click', handler, {passive:false});
     })();
   </script>
