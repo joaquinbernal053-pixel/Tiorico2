@@ -25,7 +25,7 @@
     fbq('track', 'PageView'); // Evento 1
   </script>
 
-  <!-- Pixel fallback (si el usuario bloquea JS, al menos registra PageView en algunos casos) -->
+  <!-- Pixel fallback -->
   <noscript>
     <img height="1" width="1" style="display:none"
       src="https://www.facebook.com/tr?id=25971552335789567&ev=PageView&noscript=1"/>
@@ -148,15 +148,39 @@
   <script>
     (function(){
       const btn = document.getElementById('wppBtn');
+      let alreadyFired = false; // evita doble disparo touch+click
+
+      // Backup: dispara un beacon a Facebook si el navegador corta la navegación
+      function beacon(ev){
+        try{
+          const id = '25971552335789567';
+          const u = 'https://www.facebook.com/tr/?id=' + encodeURIComponent(id) +
+                    '&ev=' + encodeURIComponent(ev) +
+                    '&dl=' + encodeURIComponent(location.href) +
+                    '&rl=' + encodeURIComponent(document.referrer || '') +
+                    '&if=false&ts=' + Date.now();
+          if(navigator.sendBeacon) navigator.sendBeacon(u, '');
+          else (new Image()).src = u;
+        }catch(e){}
+      }
 
       function fireEvents(){
-        try { fbq('track','Subscribe'); } catch(e) {}
-        try { fbq('trackCustom','WhatsAppClick'); } catch(e) {}
-        try { fbq('trackCustom','SubscribedButton'); } catch(e) {}
+        // 1) Estándar "Suscribirte"
+        let okSub = false;
+
+        try { fbq('track','Subscribe'); okSub = true; } catch(e) {}
+        if(!okSub) beacon('Subscribe');
+
+        // 2) Custom
+        try { fbq('trackCustom','WhatsAppClick'); } catch(e) { beacon('WhatsAppClick'); }
+        try { fbq('trackCustom','SubscribedButton'); } catch(e) { beacon('SubscribedButton'); }
       }
 
       function handler(e){
         e.preventDefault();
+        if(alreadyFired) return;
+        alreadyFired = true;
+
         const url = btn.getAttribute('href');
 
         fireEvents();
@@ -166,11 +190,12 @@
         // abrir WhatsApp después de dar tiempo a que salgan requests
         setTimeout(function(){
           window.location.href = url;
-        }, 500);
+        }, 550);
       }
 
-      btn.addEventListener('click', handler, {passive:false});
+      // en mobile suele entrar touchstart antes que click, evitamos doble
       btn.addEventListener('touchstart', handler, {passive:false});
+      btn.addEventListener('click', handler, {passive:false});
     })();
   </script>
 </body>
