@@ -1,41 +1,76 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tío Rico | Acceso VIP</title>
   <meta name="robots" content="noindex,nofollow">
 
-  <!-- Meta Pixel -->
+  <!-- Meta Pixel (único) -->
   <script>
-    !function(f,b,e,v,n,t,s){
-      if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)
-    }(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
+    (function(){
+      // Cargar Pixel
+      !function(f,b,e,v,n,t,s){
+        if(f.fbq) return;
+        n=f.fbq=function(){n.callMethod?
+          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq) f._fbq=n;
+        n.push=n; n.loaded=!0; n.version='2.0';
+        n.queue=[];
+        t=b.createElement(e); t.async=!0; t.src=v;
+        s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s);
+      }(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
 
-    fbq('init', '869130839351005');
-    fbq('track', 'PageView');
+      // Init + PageView (reintenta si fbq todavía no está listo)
+      const PIXEL_ID = '869130839351005';
 
-    // Disparar eventos y luego abrir WhatsApp (evita que se pierda el evento)
-    function goWhatsApp(e){
-      e.preventDefault();
+      function initAndPageView(){
+        try{
+          fbq('init', PIXEL_ID);
+          fbq('track', 'PageView');
+          window.__pixelReady = true;
+          console.log('[PIXEL] init + PageView OK');
+        }catch(e){
+          window.__pixelReady = false;
+          console.log('[PIXEL] fbq not ready, retry...');
+          setTimeout(initAndPageView, 250);
+        }
+      }
+      initAndPageView();
 
-      try{
-        fbq('trackCustom','WhatsAppClick');
-        fbq('trackCustom','SubscribedButton');
-      }catch(err){}
+      // Helper para track seguro
+      window.safeFbq = function(method, name, params){
+        try{
+          if(typeof fbq === 'function'){
+            fbq(method, name, params || {});
+            return true;
+          }
+        }catch(e){}
+        return false;
+      };
 
-      const url = e.currentTarget.getAttribute('href');
+      // Back-up: llamada manual a /tr (no siempre hace falta, pero ayuda)
+      window.pixelBeacon = function(eventName){
+        try{
+          const url = 'https://www.facebook.com/tr/?id=' + encodeURIComponent(PIXEL_ID) +
+                      '&ev=' + encodeURIComponent(eventName) +
+                      '&dl=' + encodeURIComponent(location.href) +
+                      '&rl=' + encodeURIComponent(document.referrer || '') +
+                      '&if=false&ts=' + Date.now();
 
-      setTimeout(function(){
-        window.open(url, '_blank');
-      }, 250);
-    }
+          if(navigator.sendBeacon){
+            navigator.sendBeacon(url, '');
+            return true;
+          } else {
+            (new Image()).src = url;
+            return true;
+          }
+        }catch(e){
+          return false;
+        }
+      };
+    })();
   </script>
 
   <style>
@@ -94,7 +129,6 @@
       font-size:14px;
       margin-bottom:18px;
     }
-
     .wpp{
       display:flex;
       align-items:center;
@@ -117,7 +151,6 @@
       50%{transform:scale(1.06);box-shadow:0 0 45px rgba(246,196,83,.9)}
       100%{transform:scale(1);box-shadow:0 0 25px rgba(246,196,83,.5)}
     }
-
     .info{
       margin-top:16px;
       font-size:13px;
@@ -159,11 +192,11 @@
       <h1>OBTENÉ UN <b>50%</b> EN TU<br>PRIMER DEPÓSITO</h1>
       <div class="sub">Escribinos apretando el botón de abajo</div>
 
-      <a class="wpp"
+      <a id="wppBtn"
+         class="wpp"
          href="https://wa.me/2236788513?text=Hola,%20quiero%20mi%20usuario!%20y%20reclamar%20mi%20bono%20del%2050%25"
          target="_blank"
-         rel="noopener"
-         onclick="goWhatsApp(event)">
+         rel="noopener">
         💬 WhatsApp Oficial
       </a>
 
@@ -172,18 +205,9 @@
       </div>
 
       <div class="stats">
-        <div>
-          Mínimo carga
-          <b>$2.000</b>
-        </div>
-        <div>
-          Mínimo retiro
-          <b>$5.000</b>
-        </div>
-        <div>
-          Retiros
-          <b>24 hs</b>
-        </div>
+        <div>Mínimo carga<b>$2.000</b></div>
+        <div>Mínimo retiro<b>$5.000</b></div>
+        <div>Retiros<b>24 hs</b></div>
       </div>
     </div>
 
@@ -191,5 +215,44 @@
       ©️ 2026 Juego solo para +18. Operá con responsabilidad.
     </div>
   </div>
+
+  <script>
+    (function(){
+      const btn = document.getElementById('wppBtn');
+
+      function fireAll(){
+        // Standard
+        const a = window.safeFbq('track', 'Subscribe');
+        // Custom
+        const b = window.safeFbq('trackCustom', 'WhatsAppClick');
+        const c = window.safeFbq('trackCustom', 'SubscribedButton');
+
+        // Backup beacons (si fbq no llegó a tiempo o se corta por navegación)
+        if(!a) window.pixelBeacon('Subscribe');
+        if(!b) window.pixelBeacon('WhatsAppClick');
+        if(!c) window.pixelBeacon('SubscribedButton');
+      }
+
+      function handler(e){
+        // Evita que se vaya instantáneo y se pierdan requests
+        e.preventDefault();
+        const url = btn.getAttribute('href');
+
+        fireAll();
+
+        // Reintento corto por si fbq tardó
+        setTimeout(fireAll, 200);
+
+        // Abrir WhatsApp después de asegurar envío
+        setTimeout(function(){
+          window.open(url, '_blank');
+        }, 550);
+      }
+
+      // click + touchstart para mobile
+      btn.addEventListener('click', handler, {passive:false});
+      btn.addEventListener('touchstart', handler, {passive:false});
+    })();
+  </script>
 </body>
 </html>
